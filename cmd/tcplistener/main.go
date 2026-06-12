@@ -31,6 +31,12 @@ func main() {
 		}
 
 			
-		fmt.Printf("Request line:\n - Method: %s\n - Target: %s\n - Version: %s", r.RequestLine.Method, r.RequestLine.RequestTarget, r.RequestLine.HttpVersion)
+		fmt.Printf("Request line:\n - Method: %s\n - Target: %s\n - Version: %s\n", r.RequestLine.Method, r.RequestLine.RequestTarget, r.RequestLine.HttpVersion)
+
+		fmt.Println("Headers:")
+		// get the key - value pairs of the headers
+		for key, value := range r.Headers.All() {
+			fmt.Printf("- %s: %s\n", key, value)
+		}
 	}
 }
