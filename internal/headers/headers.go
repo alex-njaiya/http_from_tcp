@@ -19,17 +19,17 @@ func isToken(str []byte) bool {
 		if ch >= 'A' && ch <= 'Z' ||
 			ch >= 'a' && ch <= 'z' ||
 			ch >= '0' && ch <= '9' {
-				found = true
-			}
+			continue
+		}
 
-			switch ch {
-			case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
-				found = true
-			}
+		switch ch {
+		case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
+			continue
+		}
 
-			if !found {
-				return false
-			}
+		if !found {
+			return false
+		}
 	}
 	return true
 }
@@ -39,7 +39,13 @@ func (h *Headers) Get(name string) string {
 }
 
 func (h *Headers) Set(name, value string) {
-	h.headers[strings.ToLower(name)] = value
+	name = strings.ToLower(name)
+
+	if v, ok := h.headers[name]; ok {
+		h.headers[name] = fmt.Sprintf("%s, %s", v, value)
+	} else {
+		h.headers[name] = value
+	}
 }
 
 func parseHeader(fieldLine []byte) (string, string, error) {
@@ -67,7 +73,7 @@ func parseHeader(fieldLine []byte) (string, string, error) {
 	return string(name), string(value), nil
 }
 
-func (h Headers) Parse(data []byte) (n int, done bool, err error) {
+func (h *Headers) Parse(data []byte) (n int, done bool, err error) {
 	read := 0
 
 	done = false
@@ -81,6 +87,7 @@ func (h Headers) Parse(data []byte) (n int, done bool, err error) {
 
 		//empty header --
 		if idx == 0 {
+			read += len(rn)
 			done = true
 			break
 		}
@@ -110,4 +117,8 @@ func NewHeaders() *Headers {
 	return &Headers{
 		headers: map[string]string{},
 	}
+}
+
+func (h *Headers) All() map[string]string {
+	return h.headers
 }
