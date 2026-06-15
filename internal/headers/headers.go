@@ -4,11 +4,14 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+
+	// "tcp_to_http/internal/headers"
 )
 
 type Headers struct {
 	headers map[string]string
 }
+
 type ParsedState string
 
 var rn = []byte("\r\n")
@@ -35,9 +38,10 @@ func isToken(str []byte) bool {
 }
 
 func (h *Headers) Get(name string) string {
-	return h.headers[strings.ToLower(name)]
-}
+	value := h.headers[strings.ToLower(name)]
 
+	return value
+}
 func (h *Headers) Set(name, value string) {
 	name = strings.ToLower(name)
 
