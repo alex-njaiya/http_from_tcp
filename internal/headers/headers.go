@@ -18,7 +18,6 @@ var rn = []byte("\r\n")
 
 func isToken(str []byte) bool {
 	for _, ch := range str {
-		found := false
 		if ch >= 'A' && ch <= 'Z' ||
 			ch >= 'a' && ch <= 'z' ||
 			ch >= '0' && ch <= '9' {
@@ -30,9 +29,7 @@ func isToken(str []byte) bool {
 			continue
 		}
 
-		if !found {
-			return false
-		}
+		return false
 	}
 	return true
 }
@@ -43,13 +40,13 @@ func (h *Headers) Get(name string) string {
 	return value
 }
 func (h *Headers) Set(name, value string) {
+	if h.headers == nil {
+		h.headers = make(map[string]string)
+	}
+
 	name = strings.ToLower(name)
 
-	if v, ok := h.headers[name]; ok {
-		h.headers[name] = fmt.Sprintf("%s, %s", v, value)
-	} else {
-		h.headers[name] = value
-	}
+	h.headers[name] = value
 }
 
 func parseHeader(fieldLine []byte) (string, string, error) {
@@ -124,5 +121,11 @@ func NewHeaders() *Headers {
 }
 
 func (h *Headers) All() map[string]string {
-	return h.headers
+	copy := make(map[string]string)
+
+	for k, v := range h.headers {
+		copy[k] = v
+	}
+
+	return copy
 }
