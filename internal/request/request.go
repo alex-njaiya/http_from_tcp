@@ -8,13 +8,6 @@ import (
 	"tcp_to_http/internal/headers"
 )
 
-// The http parser should return something like this
-// type Request struct {
-//     RequestLine RequestLine
-//     Headers     map[string]string
-//     Body        []byte
-// }
-
 type RequestLine struct {
 	HttpVersion   string
 	RequestTarget string
