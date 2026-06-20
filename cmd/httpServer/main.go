@@ -26,6 +26,8 @@ func main() {
 			body := response400()
 
 			headers.Set("Content-Length", strconv.Itoa(len(body)))
+			headers.Set("Content-Type", "text/html")
+
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
 
@@ -36,6 +38,8 @@ func main() {
 			w.WriteStatusLine(status)
 
 			headers.Set("Content-Length", strconv.Itoa(len(body)))
+			headers.Set("Content-Type", "text/html")
+
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
 
