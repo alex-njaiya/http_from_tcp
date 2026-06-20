@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"tcp_to_http/internal/request"
 	"tcp_to_http/internal/response"
@@ -25,7 +25,7 @@ func main() {
 			w.WriteStatusLine(status)
 			body := response400()
 
-			headers.Set("Content-Length", fmt.Sprintf("%d\n", len(body)))
+			headers.Set("Content-Length", strconv.Itoa(len(body)))
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
 
@@ -35,12 +35,12 @@ func main() {
 
 			w.WriteStatusLine(status)
 
-			headers.Set("Content-Length", fmt.Sprintf("%d\n", len(body)))
+			headers.Set("Content-Length", strconv.Itoa(len(body)))
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
 
 		default:
-			headers.Set("Content-Length", fmt.Sprintf("%d\n", len(body)))
+			headers.Set("Content-Length", strconv.Itoa(len(body)))
 			status = response.StatusCode(200)
 			w.WriteStatusLine(status)
 			w.WriteHeaders(headers)
@@ -66,42 +66,42 @@ func main() {
 
 func response200() []byte {
 	return []byte(`
-		<html>
-			<head>
+	<html>
+		<head>
 			<title>200 OK</title>
-			</head>
-			<body>
+		</head>
+		<body>
 			<h1>Success!</h1>
 			<p>Your request was an absolute banger.</p>
-			</body>
-		</html>
+		</body>
+	</html>
 	`)
 }
 
 func response400() []byte {
 	return []byte(`
-		<html>
-			<head>
+	<html>
+		<head>
 			<title>400 Bad Request</title>
-			</head>
-			<body>
+		</head>
+		<body>
 			<h1>Bad Request</h1>
 			<p>Your request honestly kinda sucked.</p>
-			</body>
-		</html>
+		</body>
+	</html>
 	`)
 }
 
 func response500() []byte {
 	return []byte(`
-		<html>
-			<head>
+	<html>
+		<head>
 			<title>500 Internal Server Error</title>
-			</head>
-			<body>
+		</head>
+		<body>
 			<h1>Internal Server Error</h1>
 			<p>Okay, you know what? This one is on me.</p>
-			</body>
-		</html>
+		</body>
+	</html>
 	`)
 }
