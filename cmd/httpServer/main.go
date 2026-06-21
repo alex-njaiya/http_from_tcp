@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"tcp_to_http/internal/request"
 	"tcp_to_http/internal/response"
@@ -20,8 +23,7 @@ func main() {
 		headers := response.GetDefaultHeaders(0)
 		body := response200()
 		status := response.StatusCode(400)
-		switch target_path {
-		case "/yourproblem":
+		if target_path == "/yourproblem" {
 			w.WriteStatusLine(status)
 			body := response400()
 
@@ -30,8 +32,9 @@ func main() {
 
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
+		}
 
-		case "/myproblem":
+		if target_path == "/myproblem" {
 			body := response500()
 			status = response.StatusCode(500)
 
@@ -42,15 +45,56 @@ func main() {
 
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
-
-		default:
-			headers.Set("Content-Length", strconv.Itoa(len(body)))
-			headers.Set("Content-Type", "text/html")
-			status = response.StatusCode(200)
-			w.WriteStatusLine(status)
-			w.WriteHeaders(headers)
-			w.WriteBody(response200())
 		}
+		if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/stream") {
+			// read the http request
+			res, err := http.Get("https://httpbin.org/" + target_path[len("/httpbin/"):])
+
+			if err != nil {
+				body = response500()
+				status = http.StatusInternalServerError
+			} else {
+				// write the statusline
+				w.WriteStatusLine(response.StatusCode(200))
+
+				// delete the content length headers
+				headers.Delete("Content-Length")
+
+				// add a Tranfer-Encoding header to the request headers
+				headers.Set("Transfer-Encoding", "chunked")
+				headers.Set("Content-Type", "text/plain")
+				// Write the headers
+				w.WriteHeaders(headers)
+				// Write the body
+
+				for {
+					buf := make([]byte, 32)
+
+					read, err := res.Body.Read(buf)
+
+					if err != nil {
+						break
+					}
+
+					//write the hex rep for the chunk read
+					w.WriteBody([]byte(fmt.Sprintf("%x", read)))
+					w.WriteBody([]byte("\r\n"))
+
+					w.WriteBody(buf[:read])
+					w.WriteBody([]byte("\r\n"))
+				}
+				w.WriteBody([]byte("0\r\n"))
+				return
+
+			}
+		}
+
+		headers.Set("Content-Length", strconv.Itoa(len(body)))
+		headers.Set("Content-Type", "text/html")
+		status = response.StatusCode(200)
+		w.WriteStatusLine(status)
+		w.WriteHeaders(headers)
+		w.WriteBody(response200())
 	})
 
 	if err != nil {
