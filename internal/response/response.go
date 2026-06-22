@@ -70,53 +70,60 @@ func GetDefaultHeaders(contentLen int) headers.Headers {
 	return *h
 }
 
+// Trailers -- are additional headers at the end of chunked encoding
+// They give more information about the message body that can't known until the message body is sent
+
+func (w *Writer) WriteTrailers(h headers.Headers) error {
+	// Keep track of the full response body as read in chunks from httpbin server
+	if _, err := w.WriteChunkedBodyDone(); err != nil {
+		return err
+	}
+
+	// Write the trailer handlers
+	if err := w.WriteHeaders(h); err != nil {
+		return err
+	}
+
+	// 	Write the final crlf to properly terminate the chunked response
+	_, err := w.writer.Write([]byte("\r\n"))
+	return err
 
 
+}
 
 // FIX THIS 2 FUNCTIONS
-// func (w *Writer) WriteChunkedBody(b []byte) (int, error) {
-// 	// Convert that byte count to hexadecimal text
-// 	size := strconv.FormatUint(uint64(len(b)), 16)
+func (w *Writer) WriteChunkedBody(b []byte) (int, error) {
+	if len(b) == 0 {
+		return 0, nil
+	}
+	// Convert that byte count to hexadecimal text
+	size := strconv.FormatUint(uint64(len(b)), 16)
 
-// 	// write the chunk-size line
-// 	_, err := w.writer.Write([]byte(size + "\r\n"))
+	// write the chunk-size line
+	if _, err := w.writer.Write([]byte(size + "\r\n")); err != nil {
+		return 0, err
+	}
 
-// 	if err != nil {
-// 		return 0, err
-// 	}
+	// Write body and handle partial writes
+	if n, err := w.writer.Write([]byte(b)); err != nil {
+		return n, err
+	}
 
-// 	// Write body and handle partial writes
-// 	offset := 0
-// 	for offset < len(b) {
-// 		n, err := w.writer.Write(b[offset:])
+	// Write the trailing crlf
+	if _, err := w.writer.Write([]byte("\r\n")); err != nil {
+		return 0, err
+	}
 
-// 		if err != nil {
-// 			return offset, err
-// 		}
-// 		offset += n
-// 	}
+	// Return how many payload bytes were processed and an error
+	return len(b), nil
+}
 
-// 	// Write the trailing crlf
-// 	_, err = w.writer.Write([]byte("\r\n"))
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	n1, err := w.writer.Write([]byte("0\r\n"))
 
-// 	if err != nil {
-// 		return 0, err
-// 	}
-// 	// Return how many payload bytes were processed and an error
-// 	return len(b), nil
-// }
+	if err != nil {
+		return n1, err
+	}
 
-// func (w *Writer) WriteChunkedBodyDone() (int, error) {
-// 	n1, err := w.writer.Write([]byte("0\r\n"))
-
-// 	if err != nil {
-// 		return 0, err
-// 	}
-
-// 	n2, err := w.writer.Write([]byte("\r\n"))
-// 	if err != nil {
-// 		return 0, err
-// 	}
-
-// 	return n1 + n2, nil
-// }
+	return n1, nil
+}

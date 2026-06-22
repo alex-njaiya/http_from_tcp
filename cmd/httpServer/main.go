@@ -1,7 +1,10 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -20,81 +23,117 @@ func main() {
 	server, err := server.Serve(port, func(w response.Writer, req *request.Request) {
 		// get the path and do logic against that path
 		target_path := req.RequestLine.RequestTarget
-		headers := response.GetDefaultHeaders(0)
-		body := response200()
-		status := response.StatusCode(400)
+		fmt.Printf("DEBUG: Received path = %q\n", target_path)
+
+		// ============ yourproblem path ===================
 		if target_path == "/yourproblem" {
-			w.WriteStatusLine(status)
 			body := response400()
 
+			headers := response.GetDefaultHeaders(0)
 			headers.Set("Content-Length", strconv.Itoa(len(body)))
 			headers.Set("Content-Type", "text/html")
 
+			w.WriteStatusLine(response.StatusCode(400))
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
+			return
 		}
+
+		// -============== myproblem path ============ //
 
 		if target_path == "/myproblem" {
 			body := response500()
-			status = response.StatusCode(500)
-
-			w.WriteStatusLine(status)
-
+			headers := response.GetDefaultHeaders(0)
 			headers.Set("Content-Length", strconv.Itoa(len(body)))
 			headers.Set("Content-Type", "text/html")
 
+			w.WriteStatusLine(response.StatusCode(500))
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
+			return
 		}
-		if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/stream") {
+
+		// =============== httpbin =====================
+		if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbingo/") {
+			fmt.Println("DEBUG: Entering /httpbingo/ proxy handler")
 			// read the http request
-			res, err := http.Get("https://httpbin.org/" + target_path[len("/httpbin/"):])
+			proxyPath := strings.TrimPrefix(target_path, "/httpbingo/")
+			res, err := http.Get("https://httpbingo.org/" + proxyPath)
 
 			if err != nil {
-				body = response500()
-				status = http.StatusInternalServerError
-			} else {
-				// write the statusline
-				w.WriteStatusLine(response.StatusCode(200))
-
-				// delete the content length headers
-				headers.Delete("Content-Length")
-
-				// add a Tranfer-Encoding header to the request headers
-				headers.Set("Transfer-Encoding", "chunked")
-				headers.Set("Content-Type", "text/plain")
-				// Write the headers
-				w.WriteHeaders(headers)
-				// Write the body
-
-				for {
-					buf := make([]byte, 32)
-
-					read, err := res.Body.Read(buf)
-
-					if err != nil {
-						break
-					}
-
-					//write the hex rep for the chunk read
-					w.WriteBody([]byte(fmt.Sprintf("%x", read)))
-					w.WriteBody([]byte("\r\n"))
-
-					w.WriteBody(buf[:read])
-					w.WriteBody([]byte("\r\n"))
-				}
-				w.WriteBody([]byte("0\r\n"))
+				fmt.Printf("DEBUG: http.Get error: %v\n", err)
 				return
-
 			}
+
+			defer res.Body.Close()
+
+			// Initial response headers -- fetch freah object
+			initHeaders := response.GetDefaultHeaders(0)
+			// delete the content length headers
+			initHeaders.Delete("Content-Length")
+
+			// add a Tranfer-Encoding header to the request headers
+			initHeaders.Set("Transfer-Encoding", "chunked")
+			initHeaders.Set("Content-Type", res.Header.Get("Content-Type"))
+			initHeaders.Set("Trailers", "X-Content-SHA256, X-Content-Length") // announce trailers
+
+			// Write the headers and startline
+			w.WriteStatusLine(response.StatusCode(res.StatusCode))
+			w.WriteHeaders(initHeaders)
+
+			// hashing
+			hasher := sha256.New()
+			totalBytes := 0
+			buf := make([]byte, 32*1024)
+
+			for {
+				read, err := res.Body.Read(buf)
+
+				if read > 0 {
+					chunk := buf[:read]
+					hasher.Write(chunk)
+					totalBytes += read
+
+					if _, err := w.WriteChunkedBody(chunk); err != nil {
+						return
+					}
+				}
+
+				// handle eof error
+				if err == io.EOF {
+					break
+				}
+
+				if err != nil {
+					break
+				}
+			}
+
+			// Build the trailers header and send them
+			trailerHeaders := response.GetDefaultHeaders(0)
+			hashValue := hasher.Sum(nil)
+			trailerHeaders.Delete("Content-Length")
+			trailerHeaders.Set("X-Content-SHA256", hex.EncodeToString(hashValue))
+			trailerHeaders.Set("X-Content-Length", strconv.Itoa(totalBytes))
+
+			if err := w.WriteTrailers(trailerHeaders); err != nil {
+				fmt.Printf("DEBUG: WriteTrailers error: %v\n", err)
+			}
+			return
+
 		}
 
+		// ================== DEFAULT ==================
+		fmt.Println("DEBUG: Falling to default handler")
+		body := response200()
+
+		headers := response.GetDefaultHeaders(0)
 		headers.Set("Content-Length", strconv.Itoa(len(body)))
 		headers.Set("Content-Type", "text/html")
-		status = response.StatusCode(200)
-		w.WriteStatusLine(status)
+
+		w.WriteStatusLine(response.StatusCode(200))
 		w.WriteHeaders(headers)
-		w.WriteBody(response200())
+		w.WriteBody(body)
 	})
 
 	if err != nil {
