@@ -37,11 +37,7 @@ func main() {
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
 			return
-		}
-
-		// -============== myproblem path ============ //
-
-		if target_path == "/myproblem" {
+		} else if target_path == "/myproblem" {
 			body := response500()
 			headers := response.GetDefaultHeaders(0)
 			headers.Set("Content-Length", strconv.Itoa(len(body)))
@@ -51,10 +47,80 @@ func main() {
 			w.WriteHeaders(headers)
 			w.WriteBody(body)
 			return
-		}
+		} else if req.RequestLine.RequestTarget == "/video" {
+			//we are going to read the file chunk by chunk
+			file, err := os.Open("assets/vim.mp4")
 
-		// =============== httpbin =====================
-		if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbingo/") {
+			if err != nil {
+				log.Printf("Error opening the video file: %v", err)
+				w.WriteStatusLine(response.StatusCode(500))
+				return
+			}
+
+			defer file.Close()
+
+			// get the real file size
+			stat, err := file.Stat()
+			if err != nil {
+				log.Printf("Error stating file: %v", err)
+				w.WriteStatusLine(response.StatusCode(500))
+				return
+			}
+
+			// write the statusline
+			headers := response.GetDefaultHeaders(0)
+			headers.Set("Content-Type", "video/mp4")
+			headers.Set("Content-Length", strconv.FormatInt(stat.Size(), 10))
+			headers.Set("Accept-Ranges", "bytes")
+			headers.Set("Cache-Control", "no-cache")
+
+			// write the statusline and the headers
+			w.WriteStatusLine(response.StatusCode(200))
+			w.WriteHeaders(headers)
+
+			// define the chunk size and read the chunks in a loop
+			const chunkSize = 1024 * 1024
+			buf := make([]byte, chunkSize)
+
+			hasher := sha256.New()
+			totalBytes := int64(0)
+
+			for {
+				n, err := file.Read(buf)
+
+				if n > 0 {
+					chunk := buf[:n]
+					hasher.Write(chunk)
+					totalBytes += int64(n)
+
+					if _, err := w.WriteChunkedBody(chunk); err != nil {
+						return
+					}
+				}
+				
+				if err == io.EOF {
+					break
+				}
+
+				if err != nil {
+					log.Printf("Error reading chunk from file: %v", err)
+				}
+
+			}
+
+			// add the trailers
+			trailerHeaders := response.GetDefaultHeaders(0)
+			hashValue := hasher.Sum(nil)
+			trailerHeaders.Delete("Content-Length")
+			trailerHeaders.Set("X-Content-SHA256", hex.EncodeToString(hashValue))
+			trailerHeaders.Set("X-Content-Length", strconv.FormatInt(totalBytes, 10))
+
+			if err := w.WriteTrailers(trailerHeaders); err != nil {
+				fmt.Printf("DEBUG: WriteTrailers error: %v\n", err)
+			}
+			return
+
+		} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbingo/") {
 			fmt.Println("DEBUG: Entering /httpbingo/ proxy handler")
 			// read the http request
 			proxyPath := strings.TrimPrefix(target_path, "/httpbingo/")
