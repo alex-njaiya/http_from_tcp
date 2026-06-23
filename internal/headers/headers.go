@@ -49,6 +49,16 @@ func (h *Headers) Set(name, value string) {
 	h.headers[name] = value
 }
 
+func (h * Headers) Delete(name string) error {
+	name = strings.ToLower(name)
+	if h.headers == nil {
+		return fmt.Errorf("The header does not exist:")
+	}
+
+	delete(h.headers, name)
+	return nil
+}
+
 func parseHeader(fieldLine []byte) (string, string, error) {
 	parts := bytes.SplitN(fieldLine, []byte(":"), 2)
 
